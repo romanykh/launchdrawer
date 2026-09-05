@@ -21,9 +21,9 @@
     </key>
 
     <key name="toggle-keybinding" type="as">
-      <default>["&lt;Super&gt;&lt;Shift&gt;l"]</default>
+      <default>["&lt;Super&gt;l"]</default>
       <summary>Комбінація клавіш</summary>
-      <description>Запасна комбінація клавіш для відкриття/закриття Launchpad, якщо жест не спрацьовує на вашій системі. За замовчуванням Super+Shift+L, а не Super+L, бо останнє в GNOME зазвичай зайняте під блокування екрана.</description>
+      <description>Запасна комбінація клавіш Super+L для відкриття/закриття Launchpad, якщо жест не спрацьовує на вашій системі.</description>
     </key>
 
   </schema>
