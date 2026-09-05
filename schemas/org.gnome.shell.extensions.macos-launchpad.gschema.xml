@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.macos-launchpad" path="/org/gnome/shell/extensions/macos-launchpad/">
+
+    <key name="pinch-fingers" type="i">
+      <default>4</default>
+      <summary>Кількість пальців для жесту</summary>
+      <description>Скільки пальців має бути задіяно в pinch-жесті, щоб відкрити Launchpad (зазвичай 3 або 4).</description>
+    </key>
+
+    <key name="pinch-in-threshold" type="d">
+      <default>0.7</default>
+      <summary>Поріг стиснення (відкриття)</summary>
+      <description>Наскільки треба стиснути пальці (масштаб відносно початку жесту), щоб відкрився Launchpad. 1.0 = без зміни, менше 1.0 = пальці зведені разом.</description>
+    </key>
+
+    <key name="pinch-out-threshold" type="d">
+      <default>1.3</default>
+      <summary>Поріг розведення (закриття)</summary>
+      <description>Наскільки треба розвести пальці, щоб закрити відкритий Launchpad. Більше 1.0 = пальці розведені.</description>
+    </key>
+
+    <key name="toggle-keybinding" type="as">
+      <default>["&lt;Super&gt;&lt;Shift&gt;l"]</default>
+      <summary>Комбінація клавіш</summary>
+      <description>Запасна комбінація клавіш для відкриття/закриття Launchpad, якщо жест не спрацьовує на вашій системі. За замовчуванням Super+Shift+L, а не Super+L, бо останнє в GNOME зазвичай зайняте під блокування екрана.</description>
+    </key>
+
+  </schema>
+</schemalist>
