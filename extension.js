@@ -16,11 +16,8 @@ export default class LaunchpadExtension extends Extension {
         this._settings = this.getSettings();
         this._view = null;
         this._gestureActive = false;
+        this._gestureFingers = 0;
 
-        // Без деталі ::touchpad — на деяких версіях Clutter детальний
-        // сигнал з таким суфіксом просто ніколи не емітиться (жодної
-        // помилки при цьому не буде, обробник тихо не отримує подій).
-        // Тому слухаємо всі captured-event і самі фільтруємо тип.
         this._capturedEventId = global.stage.connect(
             'captured-event',
             this._onCapturedEvent.bind(this)
@@ -113,13 +110,31 @@ export default class LaunchpadExtension extends Extension {
 
             if (phase === Clutter.TouchpadGesturePhase.BEGIN) {
                 console.log(`${LOG_PREFIX} pinch BEGIN fingers=${fingers}`);
-                this._gestureActive = true;
+
+                // Launchpad: 3 or 4 fingers only. Two-finger pinches are
+                // deliberately ignored and left to GNOME's normal gestures.
+                this._gestureFingers = fingers;
+                this._gestureActive = fingers === 3 || fingers === 4;
+
+                if (Main.overview.visible) {
+                    this._gestureActive = false;
+                    this._gestureFingers = 0;
+                    console.log(`${LOG_PREFIX} pinch ignored while Overview is visible`);
+                }
             }
 
             if (!this._gestureActive)
                 return Clutter.EVENT_PROPAGATE;
 
             if (phase === Clutter.TouchpadGesturePhase.UPDATE) {
+            
+                if (Main.overview.visible || Main.overview.visibleTarget) {
+                    console.log(`${LOG_PREFIX} pinch aborted mid-gesture — ` +
+                        'Overview became visible');
+                    this._gestureActive = false;
+                    return Clutter.EVENT_PROPAGATE;
+                }
+
                 console.log(`${LOG_PREFIX} pinch UPDATE scale=${scale.toFixed(2)}`);
                 const view = this._ensureView();
 
@@ -137,8 +152,9 @@ export default class LaunchpadExtension extends Extension {
 
             if (phase === Clutter.TouchpadGesturePhase.END ||
                 phase === Clutter.TouchpadGesturePhase.CANCEL) {
-                console.log(`${LOG_PREFIX} pinch END/CANCEL`);
+                console.log(`${LOG_PREFIX} pinch END/CANCEL fingers=${this._gestureFingers}`);
                 this._gestureActive = false;
+                this._gestureFingers = 0;
             }
         } catch (e) {
             console.error(`${LOG_PREFIX} FAILED in _onCapturedEvent(): ${e}\n${e.stack}`);
