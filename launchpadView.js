@@ -6,8 +6,8 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-const LOG_PREFIX = '[macos-launchpad]';
-const ICON_SIZE = 80;
+const LOG_PREFIX = '[MacOS-launchpad]';
+const ICON_SIZE = 64;
 const CELL_WIDTH = ICON_SIZE + 20;
 const CELL_HEIGHT = ICON_SIZE + 40;
 const CELL_SPACING = 16;
@@ -15,10 +15,14 @@ const MIN_COLUMNS = 5;
 const MAX_COLUMNS = 9;
 const ANIMATION_TIME = 300;
 
-// Панель, а не весь екран: скільки місця на монітори вона займає.
-const PANEL_WIDTH_FRACTION = 1;
+// Optional background blur. Disabled by default.
+// const BLUR_RADIUS = 40;
+// const BLUR_BRIGHTNESS = 0.65;
+
+// Launchpad panel size and animation settings.
+const PANEL_WIDTH_FRACTION = 0.60;
 const PANEL_HEIGHT_FRACTION = 0.80;
-const PANEL_MAX_WIDTH = 1100;
+const PANEL_MAX_WIDTH = 820;
 const PANEL_MAX_HEIGHT = 750;
 
 export const LaunchpadView = GObject.registerClass(
@@ -28,26 +32,55 @@ export const LaunchpadView = GObject.registerClass(
             super._init({
                 name: 'macos-launchpad',
                 style_class: 'launchpad-panel',
-                // Сам віджет НЕ реактивний як контейнер — реактивні лише
-                // конкретні елементи всередині (кнопки, поле пошуку).
-                // Важливо: розмір цього віджета = розмір видимої панелі,
-                // а не всього екрана, тож і "вхідна зона" (input region),
-                // яку GNOME виділяє під addChrome, теж дорівнює лише цій
-                // панелі — решта екрана лишається прохідною для кліків.
+                // The panel itself is reactive so its chrome region receives input.
+                
+                // Its allocation matches the visible panel, not the whole monitor.
+                
+                
+                
                 reactive: true,
+                clip_to_allocation: true,
                 visible: false,
                 opacity: 20,
             });
 
+            // If enabled, blur affects the background behind the panel.
+            
+            
+            // clip_to_allocation keeps the effect inside the panel allocation.
+            //this._blurEffect = new Shell.BlurEffect({
+            //    brightness: BLUR_BRIGHTNESS,
+            //    radius: BLUR_RADIUS,
+            //   mode: Shell.BlurMode.BACKGROUND,
+            //});
+            //this.add_effect(this._blurEffect);
+
             this.isOpen = false;
             this._appButtons = [];
+            this._chromeAdded = false;
 
-            Main.layoutManager.addChrome(this, {
-                trackFullscreen: true,
-            });
+            // Register the panel in top chrome only while it is open.
+            // Keeping it registered while hidden could interfere with input.
+            
+            
+            
+            
+            
             this._resize();
             this._monitorsChangedId = Main.layoutManager.connect(
                 'monitors-changed', () => this._resize());
+
+            // Never leave Launchpad open underneath GNOME Overview.
+            
+            
+            
+            
+            this._overviewShowingId = Main.overview.connect('showing', () => {
+                if (this.isOpen) {
+                    console.log(`${LOG_PREFIX} Overview is showing — force-closing Launchpad`);
+                    this.close();
+                }
+            });
 
             this._content = new St.BoxLayout({
                 style_class: 'launchpad-content',
@@ -69,14 +102,13 @@ export const LaunchpadView = GObject.registerClass(
 
             this._searchEntry = new St.Entry({
                 style_class: 'launchpad-search',
-                hint_text: 'Пошук застосунків…',
+                hint_text: 'Type to find apps...',
                 can_focus: true,
             });
             this._searchEntry.clutter_text.connect(
                 'text-changed', this._onSearchChanged.bind(this));
             this._searchEntry.clutter_text.connect('key-press-event', (actor, event) => {
                 if (event.get_key_symbol() === Clutter.KEY_Escape) {
-                    console.log(`${LOG_PREFIX} CLOSE PATH: Escape in search entry`);
                     this.close();
                     return Clutter.EVENT_STOP;
                 }
@@ -87,43 +119,34 @@ export const LaunchpadView = GObject.registerClass(
             const rightSpacer = new St.Widget({ x_expand: true });
             this._topBar.add_child(rightSpacer);
 
-            this._closeButton = new St.Button({
-                style_class: 'launchpad-close-button',
-                label: '✕',
-                can_focus: true,
-                reactive: true,
-            });
-            this._closeButton.connect('clicked', () => {
-                console.log(`${LOG_PREFIX} CLOSE PATH: closeButton clicked`);
-                this.close();
-            });
-            this._topBar.add_child(this._closeButton);
-
             this._scrollView = new St.ScrollView({
                 style_class: 'launchpad-scroll',
                 x_expand: true,
-                y_expand: true,
+                y_expand: false,
                 overlay_scrollbars: true,
+                clip_to_allocation: true,
             });
             this._content.add_child(this._scrollView);
 
-            // Повертаємо _gridBin, але без y_expand: true, щоб скрол працював
-            this._gridBin = new St.Bin({
-                x_align: Clutter.ActorAlign.CENTER,
-                y_align: Clutter.ActorAlign.START,
-                x_expand: false,
-                y_expand: true, 
+            // Viewport clips the visible area of the scrollable content.
+            // Content may be taller than the viewport and is scrolled inside it.
+            this._viewport = new St.Viewport({
+                clip_to_view: true,
+                x_expand: true,
+                y_expand: true,
             });
-            
+
             this._rowsBox = new St.BoxLayout({
                 style_class: 'launchpad-rows',
                 vertical: true,
                 x_align: Clutter.ActorAlign.CENTER,
                 x_expand: true,
+                y_expand: false,
             });
-            
-            // Передаємо rowsBox напряму в скрол
-            this._scrollView.set_child(this._rowsBox);
+
+            this._viewport.add_child(this._rowsBox);
+            this._scrollView.set_child(this._viewport);
+            this._updateScrollViewHeight();
 
             this.connect('key-press-event', (actor, event) => {
                 if (event.get_key_symbol() === Clutter.KEY_Escape) {
@@ -135,6 +158,17 @@ export const LaunchpadView = GObject.registerClass(
             });
         }
 
+        _updateScrollViewHeight() {
+            if (!this._scrollView || !this.height)
+                return;
+
+            // Match the panel CSS so the scroll area fills the remaining height.
+            // The top bar is 36px tall, so the ScrollView gets the remaining
+            // area instead of expanding to the height requested by its content.
+            const scrollHeight = Math.max(1, this.height - 24 - 32 - 20 - 36);
+            this._scrollView.set_height(scrollHeight);
+        }
+
         _resize() {
             const monitor = Main.layoutManager.primaryMonitor;
             if (!monitor)
@@ -144,6 +178,7 @@ export const LaunchpadView = GObject.registerClass(
             const height = Math.min(PANEL_MAX_HEIGHT, monitor.height * PANEL_HEIGHT_FRACTION);
 
             this.set_size(width, height);
+            this._updateScrollViewHeight();
             this.set_position(
                 monitor.x + (monitor.width - width) / 2,
                 monitor.y + (monitor.height - height) / 2
@@ -194,7 +229,17 @@ export const LaunchpadView = GObject.registerClass(
                 row.add_child(button);
             });
         
-        // ДОДАЙТЕ ЦЕЙ РЯДОК: змушує скрол перерахувати висоту контенту
+            const rowCount = Math.ceil(apps.length / columns);
+            const rowSpacing = 24;
+            const verticalPadding = 16;
+            const contentHeight = rowCount > 0
+                ? rowCount * CELL_HEIGHT + (rowCount - 1) * rowSpacing + verticalPadding
+                : verticalPadding;
+
+            // Give the rows container its real content height so the viewport can scroll it.
+            
+            
+            this._rowsBox.set_height(contentHeight);
             this._rowsBox.queue_relayout();
         
         }
@@ -255,18 +300,21 @@ export const LaunchpadView = GObject.registerClass(
             }
         }
 
-        _isPointInsidePanel(x, y) {
-            const [px, py] = this.get_transformed_position();
-            const [pw, ph] = this.get_transformed_size();
-            return x >= px && x <= px + pw && y >= py && y <= py + ph;
-        }
-
         open() {
             if (this.isOpen)
                 return;
             console.log(`${LOG_PREFIX} view.open()`);
 
             this.isOpen = true;
+
+            if (!this._chromeAdded) {
+                Main.layoutManager.addTopChrome(this, {
+                    trackFullscreen: true,
+                });
+                this._chromeAdded = true;
+                console.log(`${LOG_PREFIX} addTopChrome — chrome registered`);
+            }
+
             this._resize();
 
             if (Main.overview.visible) {
@@ -285,32 +333,19 @@ export const LaunchpadView = GObject.registerClass(
 
             this._searchEntry.grab_key_focus();
 
-            // Без Main.pushModal — свідомо. Модальний граб блокував би
-            // ввід по всьому екрану, а нам, навпаки, треба, щоб клік поза
-            // панеллю проходив далі, до застосунку/стільниці під ним.
-            // Замість модального грабу — спостерігаємо на рівні сцени
-            // (captured-event бачить усі події незалежно від грабу) і самі
-            // вирішуємо, коли закритись, не заважаючи звичайній доставці
-            // події тому, кому вона насправді призначена.
+            // Do not use Main.pushModal: it would block input outside the panel.
+            
+            
+            // Listen at stage level so Escape can close the panel without a modal grab.
+            
+            
+            
             this._stageCaptureId = global.stage.connect('captured-event',
                 (actor, event) => {
                     if (event.type() === Clutter.EventType.KEY_PRESS &&
                         event.get_key_symbol() === Clutter.KEY_Escape) {
-                        console.log(`${LOG_PREFIX} CLOSE PATH: Escape (stage captured-event)`);
                         this.close();
                         return Clutter.EVENT_STOP;
-                    }
-                    if (event.type() === Clutter.EventType.BUTTON_PRESS) {
-                        const [x, y] = event.get_coords();
-                        if (!this._isPointInsidePanel(x, y)) {
-                            console.log(`${LOG_PREFIX} CLOSE PATH: click outside panel ` +
-                                `(${x.toFixed(0)}, ${y.toFixed(0)}) -> close(), ` +
-                                'letting click pass through');
-                            this.close();
-                        }
-                        // Пропускаємо подію далі в будь-якому разі — саме
-                        // так клік реально "проходить" до застосунку/
-                        // стільниці під панеллю.
                     }
                     return Clutter.EVENT_PROPAGATE;
                 });
@@ -325,11 +360,8 @@ export const LaunchpadView = GObject.registerClass(
         }
 
         close() {
-            console.log(`${LOG_PREFIX} close() called, isOpen=${this.isOpen}`);
-            if (!this.isOpen) {
-                console.log(`${LOG_PREFIX} close() early-return, already closed`);
+            if (!this.isOpen)
                 return;
-            }
 
             try {
                 this.isOpen = false;
@@ -339,10 +371,8 @@ export const LaunchpadView = GObject.registerClass(
                     this._stageCaptureId = null;
                 }
 
-                if (Main.overview.visible) {
-                    console.log(`${LOG_PREFIX} Main.overview still visible on close — hiding it`);
+                if (Main.overview.visible)
                     Main.overview.hide();
-                }
 
                 this.ease({
                     opacity: 0,
@@ -352,20 +382,30 @@ export const LaunchpadView = GObject.registerClass(
                     mode: Clutter.AnimationMode.EASE_IN_QUAD,
                     onComplete: () => {
                         this.visible = false;
+                        if (this._chromeAdded) {
+                            Main.layoutManager.removeChrome(this);
+                            this._chromeAdded = false;
+                            }
                         this.emit('closed');
-                        console.log(`${LOG_PREFIX} close() animation complete, visible=false`);
                     },
                 });
-                console.log(`${LOG_PREFIX} close() finished setting up animation`);
             } catch (e) {
                 console.error(`${LOG_PREFIX} FAILED inside close(): ${e}\n${e.stack}`);
             }
         }
 
         destroy() {
+            if (this._chromeAdded) {
+                Main.layoutManager.removeChrome(this);
+                this._chromeAdded = false;
+            }
             if (this._monitorsChangedId) {
                 Main.layoutManager.disconnect(this._monitorsChangedId);
                 this._monitorsChangedId = null;
+            }
+            if (this._overviewShowingId) {
+                Main.overview.disconnect(this._overviewShowingId);
+                this._overviewShowingId = null;
             }
             if (this._stageCaptureId) {
                 global.stage.disconnect(this._stageCaptureId);
