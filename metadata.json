@@ -1,0 +1,9 @@
+{
+    "uuid": "macos-launchpad@ternopil.local",
+    "name": "macOS-style Launchpad",
+    "description": "Замінює стандартну сітку застосунків GNOME на екран у стилі Launchpad з macOS. Відкривається жестом pinch (стиснення пальцями) на трекпаді або комбінацією клавіш Super+L. Плавна анімація масштабування/прозорості, живий пошук, закриття по Escape, кліку поза сіткою або зворотним pinch (розведенням пальців).",
+    "shell-version": ["45", "46", "47", "48", "49", "50"],
+    "url": "https://github.com/example/macos-launchpad",
+    "version": 1,
+    "settings-schema": "org.gnome.shell.extensions.macos-launchpad"
+}
